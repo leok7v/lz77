@@ -10,6 +10,7 @@
 typedef struct lz77_s lz77_t;
 
 typedef struct lz77_s {
+    // `that` see: https://gist.github.com/leok7v/8d118985d3236b0069d419166f4111cf
     void*    that;  // caller supplied data
     errno_t  error; // sticky; for read()/write() compress() and decompress()
     // caller supplied read()/write() must error via .error field
@@ -39,11 +40,29 @@ extern lz77_if lz77;
 #define lz77_implemented
 
 #ifndef lz77_assert
-#define lz77_assert(...) do {] while (0)
+#define lz77_assert(...) do { } while (0)
 #endif
+
 #ifndef lz77_println
-#define lz77_println(...) do {] while (0)
+#define lz77_println(...) do { } while (0)
 #endif
+
+// push `short hand` macro definitions used for readability of code:
+
+#pragma push_macro("write_bit")
+#pragma push_macro("write_bits")
+#pragma push_macro("write_number")
+
+#pragma push_macro("read_bit")
+#pragma push_macro("read_bits")
+#pragma push_macro("read_number")
+
+#pragma push_macro("return_invalid")
+#pragma push_macro("if_error_return")
+
+#pragma push_macro("init_histograms")
+#pragma push_macro("histogram_pos_len")
+#pragma push_macro("dump_histograms")
 
 #ifdef lz77_historgram
 
@@ -56,36 +75,36 @@ static inline uint32_t lz77_bit_count(size_t v) {
 static size_t lz77_hist_len[64];
 static size_t lz77_hist_pos[64];
 
-#define lz77_init_histograms() do {                             \
-    memset(lz77_hist_pos, 0x00, sizeof(lz77_hist_pos));         \
-    memset(lz77_hist_len, 0x00, sizeof(lz77_hist_len));         \
+#define init_histograms() do {                          \
+    memset(lz77_hist_pos, 0x00, sizeof(lz77_hist_pos)); \
+    memset(lz77_hist_len, 0x00, sizeof(lz77_hist_len)); \
 } while (0)
 
-#define lz77_histogram_pos_len(pos, len) do {                   \
-    lz77_hist_pos[lz77_bit_count(pos)]++;                       \
-    lz77_hist_len[lz77_bit_count(len)]++;                       \
+#define  histogram_pos_len(pos, len) do {               \
+    lz77_hist_pos[lz77_bit_count(pos)]++;               \
+    lz77_hist_len[lz77_bit_count(len)]++;               \
 } while (0)
 
-#define lz77_dump_histograms() do {                             \
-    lz77_println("Histogram log2(len):");                       \
-    for (int8_t i = 0; i < 64; i++) {                           \
-        if (lz77_hist_len[i] > 0) {                             \
-            lz77_println("len[%d]: %lld", i, lz77_hist_len[i]); \
-        }                                                       \
-    }                                                           \
-    lz77_println("Histogram log2(pos):");                       \
-    for (int8_t i = 0; i < 64; i++) {                           \
-        if (lz77_hist_pos[i] > 0) {                             \
-            lz77_println("pos[%d]: %lld", i, lz77_hist_pos[i]); \
-        }                                                       \
-    }                                                           \
+#define dump_histograms() do {                                      \
+    lz77_println("Histogram log2(len):");                           \
+    for (int8_t i_ = 0; i_ < 64; i_++) {                            \
+        if (lz77_hist_len[i_] > 0) {                                \
+            lz77_println("len[%d]: %lld", i_, lz77_hist_len[i_]);   \
+        }                                                           \
+    }                                                               \
+    lz77_println("Histogram log2(pos):");                           \
+    for (int8_t i_ = 0; i_ < 64; i_++) {                            \
+        if (lz77_hist_pos[i_] > 0) {                                \
+            lz77_println("pos[%d]: %lld", i_, lz77_hist_pos[i_]);   \
+        }                                                           \
+    }                                                               \
 } while (0)
 
 #else
 
-#define lz77_init_histograms() do { } while (0)
-#define lz77_histogram_pos_len(pos, len) do { } while (0)
-#define lz77_dump_histograms() do { } while (0)
+#define init_histograms()           do { } while (0)
+#define histogram_pos_len(pos, len) do { } while (0)
+#define dump_histograms()           do { } while (0)
 
 #endif
 
@@ -120,21 +139,9 @@ static inline void lz77_write_number(lz77_t* lz, uint64_t* b64,
     } while (bits != 0);
 }
 
-#pragma push_macro("write_bit")
-#pragma push_macro("write_bits")
-#pragma push_macro("write_number")
-
-#pragma push_macro("read_bit")
-#pragma push_macro("read_bits")
-#pragma push_macro("read_number")
-
-#pragma push_macro("return_invalid")
-#pragma push_macro("lz77_if_error_return")
-
-#define lz77_if_error_return(lz);do {                   \
+#define if_error_return(lz);do {                        \
     if (lz->error) { return; }                          \
 } while (0)
-
 
 #define return_invalid(lz) do {                         \
     lz->error = EINVAL;                                 \
@@ -143,32 +150,32 @@ static inline void lz77_write_number(lz77_t* lz, uint64_t* b64,
 
 #define write_bit(lz, bit) do {                         \
     lz77_write_bit(lz, &b64, &bp, bit);                 \
-    lz77_if_error_return(lz);                           \
+    if_error_return(lz);                                \
 } while (0)
 
 #define write_bits(lz, bits, n) do {                    \
     lz77_write_bits(lz, &b64, &bp, bits, n);            \
-    lz77_if_error_return(lz);                           \
+    if_error_return(lz);                                \
 } while (0)
 
 #define write_number(lz, bits, base) do {               \
     lz77_write_number(lz, &b64, &bp, bits, base);       \
-    lz77_if_error_return(lz);                           \
+    if_error_return(lz);                                \
 } while (0)
 
 static void lz77_write_header(lz77_t* lz, size_t bytes, uint8_t window_bits) {
-    lz77_if_error_return(lz);
+    if_error_return(lz);
     if (window_bits < 10 || window_bits > 20) { return_invalid(lz); }
     lz->write(lz, (uint64_t)bytes);
-    lz77_if_error_return(lz);
+    if_error_return(lz);
     lz->write(lz, (uint64_t)window_bits);
 }
 
 static void lz77_compress(lz77_t* lz, const uint8_t* data, size_t bytes,
         uint8_t window_bits) {
-    lz77_if_error_return(lz);
+    if_error_return(lz);
     if (window_bits < 10 || window_bits > 20) { return_invalid(lz); }
-    lz77_init_histograms();
+    init_histograms();
     const size_t window = ((size_t)1U) << window_bits;
     const uint8_t base = (window_bits - 4) / 2;
     uint64_t b64 = 0;
@@ -200,20 +207,20 @@ static void lz77_compress(lz77_t* lz, const uint8_t* data, size_t bytes,
         if (len > 2) {
             rt_assert(0 < pos && pos < window);
             rt_assert(0 < len);
-            write_bits(lz, 0b11, 2); /* flags */
+            write_bits(lz, 0b11, 2); // flags
             write_number(lz, pos, base);
             write_number(lz, len, base);
-            lz77_histogram_pos_len(pos, len);
+            histogram_pos_len(pos, len);
             i += len;
         } else {
             const uint8_t b = data[i];
             // European texts are predominantly spaces and small ASCII letters:
             if (b < 0x80) {
-                write_bit(lz, 0); /* flags */
-                write_bits(lz, b, 7); // ASCII byte < 0x80 with 8th but set to `0`
+                write_bit(lz, 0);     // flags
+                write_bits(lz, b, 7); // ASCII byte < 0x80 with 8th bit set to `0`
             } else {
-                write_bits(lz, 0b10, 2); /* flags */
-                write_bits(lz, b, 7); // only 7 bit because 8th bit is `1`
+                write_bits(lz, 0b10, 2); // flags
+                write_bits(lz, b, 7);    // only 7 bit because 8th bit is `1`
             }
             i++;
         }
@@ -222,7 +229,7 @@ static void lz77_compress(lz77_t* lz, const uint8_t* data, size_t bytes,
         lz->write(lz, b64);
         lz->written += 8;
     }
-    lz77_dump_histograms();
+    dump_histograms();
 }
 
 static inline uint64_t lz77_read_bit(lz77_t* lz, uint64_t* b64, uint32_t* bp) {
@@ -258,21 +265,21 @@ static inline uint64_t lz77_read_number(lz77_t* lz, uint64_t* b64,
 
 #define read_bit(lz, bit) do {                      \
     bit = lz77_read_bit(lz, &b64, &bp);             \
-    lz77_if_error_return(lz);                       \
+    if_error_return(lz);                            \
 } while (0)
 
 #define read_bits(lz, bits, n) do {                 \
     bits = lz77_read_bits(lz, &b64, &bp, n);        \
-    lz77_if_error_return(lz);                       \
+    if_error_return(lz);                            \
 } while (0)
 
 #define read_number(lz, bits, base) do {            \
     bits = lz77_read_number(lz, &b64, &bp, base);   \
-    lz77_if_error_return(lz);                       \
+    if_error_return(lz);                            \
 } while (0)
 
 static void lz77_read_header(lz77_t* lz, size_t *bytes, uint8_t *window_bits) {
-    lz77_if_error_return(lz);
+    if_error_return(lz);
     *bytes = (size_t)lz->read(lz);
     *window_bits = (uint8_t)lz->read(lz);
     if (*window_bits < 10 || *window_bits > 20) { return_invalid(lz); }
@@ -280,7 +287,7 @@ static void lz77_read_header(lz77_t* lz, size_t *bytes, uint8_t *window_bits) {
 
 static void lz77_decompress(lz77_t* lz, uint8_t* data, size_t bytes,
         uint8_t window_bits) {
-    lz77_if_error_return(lz);
+    if_error_return(lz);
     uint64_t b64 = 0;
     uint32_t bp = 0;
     uint64_t verify_window_bits;
@@ -332,7 +339,13 @@ lz77_if lz77 = {
     .decompress   = lz77_decompress,
 };
 
-#pragma pop_macro("lz77_if_error_return")
+// pop `short hand` macro definitions
+
+#pragma pop_macro("dump_histograms")
+#pragma pop_macro("histogram_pos_len")
+#pragma pop_macro("init_histograms")
+
+#pragma pop_macro("if_error_return")
 #pragma pop_macro("return_invalid")
 
 #pragma pop_macro("write_number")

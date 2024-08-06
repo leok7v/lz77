@@ -9,7 +9,7 @@
 #include "rt.h"
 
 #if defined(_MSC_VER) && defined(NEED_WIN32_API)
-#define STRICT // opposite is SLOPPY, right?
+#define STRICT // as opposite is easy, gentle or sloppy?
 #define WIN32_LEAN_AND_MEAN // exclude stuff which no one needs/wants
 #define VC_EXTRALEAN        // exclude even more stuff
 #include <Windows.h>
@@ -213,8 +213,8 @@ int main(int argc, const char* argv[]) {
         r = test_compression(FILE_NAME);
     }
 #endif
-    if (file_exist("test/ut.h")) {
-        r = test_compression("test/ut.h");
+    if (file_exist("test/rt.h")) {
+        r = test_compression("test/rt.h");
     }
     if (file_exist("test/ui.h")) {
         r = test_compression("test/ui.h");
@@ -228,7 +228,7 @@ int main(int argc, const char* argv[]) {
 #define lz77_assert(b, ...) rt_assert(b, __VA_ARGS__)
 #define lz77_println(...)   rt_println(__VA_ARGS__)
 
-#define lz77_historgram // to dump histograms on compress
+#define lz77_historgram // to dump histograms on compress (comment next line)
 #undef  lz77_historgram // no histograms
 
 #define lz77_implementation // this will include the implementation of lz77

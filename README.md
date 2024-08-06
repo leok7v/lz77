@@ -5,7 +5,7 @@ Inspired by late night conversation with ChatGPT:
 
 https://chatgpt.com/share/b97f9460-5f95-48a1-a1ec-4bdedf6a4c8d
 
-(which was stupid on my part)
+(which was slightly stupid on my part: about window overlap)
 
 And then fascinating story of LZ77 here:
 

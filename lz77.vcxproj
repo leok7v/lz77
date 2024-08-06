@@ -26,6 +26,7 @@
     <ClCompile Include="test.c" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="download.bat" />
     <None Include="README.md" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

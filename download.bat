@@ -1,8 +1,8 @@
 @echo off
 mkdir test 2>nul >nul
 pushd test
-if not exist "ut.h" (
-	curl -LJO https://raw.githubusercontent.com/leok7v/ui/main/single_file_lib/ut/ut.h
+if not exist "rt.h" (
+	curl -LJO https://raw.githubusercontent.com/leok7v/ui/main/single_file_lib/rt/rt.h
 )
 if not exist "ui.h" (
 	curl -LJO https://raw.githubusercontent.com/leok7v/ui/main/single_file_lib/ui/ui.h
