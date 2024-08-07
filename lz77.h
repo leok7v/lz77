@@ -47,15 +47,6 @@ extern lz77_if lz77;
 #define lz77_println(...) do { } while (0)
 #endif
 
-// push `short hand` macro definitions used for readability of code:
-
-#pragma push_macro("lz77_return_invalid")
-#pragma push_macro("lz77_if_error_return")
-
-#pragma push_macro("lz77_init_histograms")
-#pragma push_macro("lz77_histogram_pos_len")
-#pragma push_macro("lz77_dump_histograms")
-
 #define lz77_if_error_return(lz);do {                   \
     if (lz->error) { return; }                          \
 } while (0)
@@ -308,15 +299,6 @@ lz77_if lz77 = {
     .read_header  = lz77_read_header,
     .decompress   = lz77_decompress,
 };
-
-// pop `short hand` macro definitions
-
-#pragma pop_macro("lz77_dump_histograms")
-#pragma pop_macro("lz77_histogram_pos_len")
-#pragma pop_macro("lz77_init_histograms")
-
-#pragma pop_macro("lz77_if_error_return")
-#pragma pop_macro("lz77_return_invalid")
 
 #endif // lz77_implementation
 
