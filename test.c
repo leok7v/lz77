@@ -192,7 +192,8 @@ static errno_t test_compression(const char* fn) {
 }
 
 int main(int argc, const char* argv[]) {
-    (void)argc; (void)argv;
+    const char* exe = argv[0]; // executable filepath or name
+    (void)argc; // unused
     errno_t r = 0;
     if (r == 0) {
         uint8_t data[1024] = {0};
@@ -221,6 +222,9 @@ int main(int argc, const char* argv[]) {
     }
     if (file_exist("test/sqlite3.c")) {
         r = test_compression("test/sqlite3.c");
+    }
+    if (file_exist(exe)) {
+        r = test_compression(exe);
     }
     return r;
 }
