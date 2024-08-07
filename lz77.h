@@ -52,6 +52,7 @@ extern lz77_if lz77;
 #pragma push_macro("write_bit")
 #pragma push_macro("write_bits")
 #pragma push_macro("write_number")
+#pragma push_macro("flush")
 
 #pragma push_macro("read_bit")
 #pragma push_macro("read_bits")
@@ -148,19 +149,26 @@ static inline void lz77_write_number(lz77_t* lz, uint64_t* b64,
     return;                                             \
 } while (0)
 
-#define write_bit(lz, bit) do {                         \
+#define write_bit(lz, b64, bp, bit) do {                \
     lz77_write_bit(lz, &b64, &bp, bit);                 \
     if_error_return(lz);                                \
 } while (0)
 
-#define write_bits(lz, bits, n) do {                    \
+#define write_bits(lz, b64, bp, bits, n) do {           \
     lz77_write_bits(lz, &b64, &bp, bits, n);            \
     if_error_return(lz);                                \
 } while (0)
 
-#define write_number(lz, bits, base) do {               \
+#define write_number(lz, b64, bp, bits, base) do {      \
     lz77_write_number(lz, &b64, &bp, bits, base);       \
     if_error_return(lz);                                \
+} while (0)
+
+#define flush(lz, b64, bp) do {                         \
+    if (bp > 0) {                                       \
+        lz->write(lz, b64);                             \
+        lz->written += 8;                               \
+    }                                                   \
 } while (0)
 
 static void lz77_write_header(lz77_t* lz, size_t bytes, uint8_t window_bits) {
@@ -180,8 +188,6 @@ static void lz77_compress(lz77_t* lz, const uint8_t* data, size_t bytes,
     const uint8_t base = (window_bits - 4) / 2;
     uint64_t b64 = 0;
     uint32_t bp = 0;
-    // for parameter verification in decompress()
-    write_bits(lz, (uint64_t)window_bits, 8);
     size_t i = 0;
     while (i < bytes) {
         // length and position of longest matching sequence
@@ -207,28 +213,27 @@ static void lz77_compress(lz77_t* lz, const uint8_t* data, size_t bytes,
         if (len > 2) {
             rt_assert(0 < pos && pos < window);
             rt_assert(0 < len);
-            write_bits(lz, 0b11, 2); // flags
-            write_number(lz, pos, base);
-            write_number(lz, len, base);
+            write_bits(lz, b64, bp, 0b11, 2); // flags
+            write_number(lz, b64, bp, pos, base);
+            write_number(lz, b64, bp, len, base);
             histogram_pos_len(pos, len);
             i += len;
         } else {
             const uint8_t b = data[i];
             // European texts are predominantly spaces and small ASCII letters:
             if (b < 0x80) {
-                write_bit(lz, 0);     // flags
-                write_bits(lz, b, 7); // ASCII byte < 0x80 with 8th bit set to `0`
+                write_bit(lz, b64, bp, 0);     // flags
+                // ASCII byte < 0x80 with 8th bit set to `0`
+                write_bits(lz, b64, bp, b, 7);
             } else {
-                write_bits(lz, 0b10, 2); // flags
-                write_bits(lz, b, 7);    // only 7 bit because 8th bit is `1`
+                write_bits(lz, b64, bp, 0b10, 2); // flags
+                // only 7 bit because 8th bit is `1`
+                write_bits(lz, b64, bp, b, 7);
             }
             i++;
         }
     }
-    if (bp > 0) {
-        lz->write(lz, b64);
-        lz->written += 8;
-    }
+    flush(lz, b64, bp);
     dump_histograms();
 }
 
@@ -290,9 +295,6 @@ static void lz77_decompress(lz77_t* lz, uint8_t* data, size_t bytes,
     if_error_return(lz);
     uint64_t b64 = 0;
     uint32_t bp = 0;
-    uint64_t verify_window_bits;
-    read_bits(lz, verify_window_bits, 8);
-    if (window_bits != verify_window_bits) { return_invalid(lz); }
     if (window_bits < 10 || window_bits > 20) { return_invalid(lz); }
     const size_t window = ((size_t)1U) << window_bits;
     const uint8_t base = (window_bits - 4) / 2;
@@ -348,6 +350,7 @@ lz77_if lz77 = {
 #pragma pop_macro("if_error_return")
 #pragma pop_macro("return_invalid")
 
+#pragma pop_macro("flush")
 #pragma pop_macro("write_number")
 #pragma pop_macro("write_bits")
 #pragma pop_macro("write_bit")
