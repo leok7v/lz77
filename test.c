@@ -5,8 +5,7 @@
 #pragma warning(disable: 4711) // function selected for automatic inline expansion
 #endif
 
-#include "lz77.h"
-#include "rt.h"
+#define NEED_WIN32_API
 
 #if defined(_MSC_VER) && defined(NEED_WIN32_API)
 #define STRICT // as opposite is easy, gentle or sloppy?
@@ -15,9 +14,10 @@
 #include <Windows.h>
 #endif
 
-enum { lzn_window_bits = 11 };
+#include "lz77.h"
+#include "rt.h"
 
-#define FILE_NAME __FILE__
+enum { lzn_window_bits = 11 };
 
 static uint64_t file_read(lz77_t* lz) {
     uint64_t buffer = 0;
@@ -158,13 +158,13 @@ static errno_t read_whole_file(const char* fn, const uint8_t* *data, size_t *byt
     FILE* f = null;
     errno_t r = fopen_s(&f, fn, "rb");
     if (r != 0) {
-        rt_println("Failed to open file \"%s\": %s", FILE_NAME, strerror(r));
+        rt_println("Failed to open file \"%s\": %s", fn, strerror(r));
         return r;
     }
     r = read_fully(f, data, bytes); // to the heap
     (void)fclose(f); // file was open for reading fclose() should not fail
     if (r != 0) {
-        rt_println("Failed to read file \"%s\": %s", FILE_NAME, strerror(r));
+        rt_println("Failed to read file \"%s\": %s", fn, strerror(r));
         fclose(f);
         return r;
     }
@@ -196,7 +196,7 @@ int main(int argc, const char* argv[]) {
     (void)argc; // unused
     errno_t r = 0;
     if (r == 0) {
-        uint8_t data[1024] = {0};
+        uint8_t data[4 * 1024] = {0};
         r = test(data, sizeof(data));
         // lz77 deals with run length encoding in amazing overlapped way
         for (int32_t i = 0; i < sizeof(data); i += 4) {
@@ -209,21 +209,19 @@ int main(int argc, const char* argv[]) {
         size_t bytes = strlen((const char*)data);
         r = test((const uint8_t*)data, bytes);
     }
- #ifdef FILE_NAME
-    if (r == 0) {
-        r = test_compression(FILE_NAME);
+    if (r == 0 && file_exist(__FILE__)) {
+        r = test_compression(__FILE__);
     }
-#endif
-    if (file_exist("test/rt.h")) {
+    if (r == 0 && file_exist("test/rt.h")) {
         r = test_compression("test/rt.h");
     }
-    if (file_exist("test/ui.h")) {
+    if (r == 0 && file_exist("test/ui.h")) {
         r = test_compression("test/ui.h");
     }
-    if (file_exist("test/sqlite3.c")) {
+    if (r == 0 && file_exist("test/sqlite3.c")) {
         r = test_compression("test/sqlite3.c");
     }
-    if (file_exist(exe)) {
+    if (r == 0 && file_exist(exe)) {
         r = test_compression(exe);
     }
     return r;
