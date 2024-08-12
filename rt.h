@@ -43,10 +43,15 @@ static int32_t rt_print_line(const char* filename, int32_t line,
     int32_t n = vsnprintf(text, sizeof(text) - 2, format, va);
     va_end(va);
     if (n < 0) {
-        rt_output_line("printf format error\n");
+        snprintf(text, sizeof(text) - 2, "%s(%d): %s format error \"%s\"\n",
+                 filename, line, function, format);
+        text[sizeof(text) - 1] = 0;
+        rt_output_line(text);
     } else { // n >= 0
-        text[n + 0] = '\n';
-        text[n + 1] = 0x00;
+        // remove all '\n' '\r' '\t' anything < 0x20 from the end:
+        while (n > 0 && text[n - 1] < 0x20) { n--; }
+        text[n++] = '\n'; // append single '\n'
+        text[n] = 0;
         char prefix[1024];
         snprintf(prefix, sizeof(prefix) - 1, "%s(%d):", filename, line);
         prefix[sizeof(prefix) - 1] = 0x00;
@@ -82,7 +87,7 @@ static int32_t rt_exit(int exit_code) {
     if (exit_code == 0) { rt_println("exit code must not be zero"); }
     if (exit_code != 0) {
         #ifdef _WINDOWS_
-            DebugBreak();
+            DebugBreak(); // convinience of debugging
             ExitProcess(exit_code);
         #else
             exit(exit_code);
