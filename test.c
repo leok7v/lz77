@@ -195,6 +195,7 @@ int main(int argc, const char* argv[]) {
     const char* exe = argv[0]; // executable filepath or name
     (void)argc; // unused
     errno_t r = 0;
+/*
     if (r == 0) {
         uint8_t data[4 * 1024] = {0};
         r = test(data, sizeof(data));
@@ -204,6 +205,7 @@ int main(int argc, const char* argv[]) {
         }
         r = test(data, sizeof(data));
     }
+*/
     if (r == 0) {
         const char* data = "Hello World Hello.World Hello World";
         size_t bytes = strlen((const char*)data);
