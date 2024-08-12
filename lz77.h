@@ -127,7 +127,7 @@ static inline void lz77_write_number(lz77_t* lz, uint64_t* b64,
     do {
         lz77_write_bits(lz, b64, bp, bits, base);
         bits >>= base;
-        lz77_write_bit(lz, b64, bp, bits != 0); // stop bit
+        lz77_write_bit(lz, b64, bp, bits != 0); // continue bit
     } while (bits != 0);
 }
 
@@ -198,7 +198,8 @@ static void lz77_compress(lz77_t* lz, const uint8_t* data, size_t bytes,
                 lz77_write_bits(lz, &b64, &bp, b, 7);
                 lz77_if_error_return(lz);
             } else {
-                lz77_write_bits(lz, &b64, &bp, 0b10, 2); // flags
+                lz77_write_bit(lz, &b64, &bp, 1); // flag: 1
+                lz77_write_bit(lz, &b64, &bp, 0); // flag: 0
                 lz77_if_error_return(lz);
                 // only 7 bit because 8th bit is `1`
                 lz77_write_bits(lz, &b64, &bp, b, 7);
@@ -279,13 +280,13 @@ static void lz77_decompress(lz77_t* lz, uint8_t* data, size_t bytes,
                 const size_t n = i + (size_t)len;
                 while (i < n) { data[i] = s[i]; i++; }
             } else { // byte >= 0x80
-                size_t b = lz77_read_bits(lz, &b64, &bp, 7);
+                uint64_t b = lz77_read_bits(lz, &b64, &bp, 7);
                 lz77_if_error_return(lz);
                 data[i] = (uint8_t)b | 0x80;
                 i++;
             }
         } else { // literal byte
-            size_t b = lz77_read_bits(lz, &b64, &bp, 7); // ASCII byte < 0x80
+            uint64_t b = lz77_read_bits(lz, &b64, &bp, 7); // ASCII byte < 0x80
             lz77_if_error_return(lz);
             data[i] = (uint8_t)b;
             i++;
