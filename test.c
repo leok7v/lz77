@@ -206,6 +206,14 @@ int main(int argc, const char* argv[]) {
         r = test(data, sizeof(data));
     }
 */
+    // bits len: 3.01 pos: 10.73 words: 91320 lens: 112
+    if (r == 0 && file_exist("test/gutenberg-kjv-bible.txt")) {
+        r = test_compression("test/gutenberg-kjv-bible.txt");
+    }
+    // len: 2.33 pos: 10.78 words: 12034 lens: 40
+    if (r == 0 && file_exist("test/hhgttg.txt")) {
+        r = test_compression("test/hhgttg.txt");
+    }
     if (r == 0) {
         const char* data = "Hello World Hello.World Hello World";
         size_t bytes = strlen((const char*)data);

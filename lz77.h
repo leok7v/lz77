@@ -2,6 +2,7 @@
 #define lz77_definition
 
 #include <errno.h>
+#include <math.h>
 #include <stdint.h>
 
 // Naive LZ77 implementation inspired by CharGPT discussion
@@ -95,7 +96,7 @@ static size_t lz77_hist_pos[64];
 #else
 
 #define lz77_init_histograms()           do { } while (0)
-#define lz77_histogram_pos_len(pos, len) do { } while (0)
+#define lz77_histogram_pos_len(pos, bytes) do { } while (0)
 #define lz77_dump_histograms()           do { } while (0)
 
 #endif
@@ -146,8 +147,125 @@ static void lz77_write_header(lz77_t* lz, size_t bytes, uint8_t window_bits) {
     lz->write(lz, (uint64_t)window_bits);
 }
 
+typedef uint8_t map_entry_t[256]; // data[0] number of bytes [2..255]
+
+typedef struct {
+    map_entry_t entry[512 * 1024]; // 128MB
+    int32_t entries;
+    int32_t max_chain;
+    int32_t max_bytes;
+} map_t;
+
+static uint32_t map_hash32(const uint8_t* data, int64_t bytes) {
+    uint32_t hash  = 0x811c9dc5; // FNV_offset_basis for 32-bit
+    uint32_t prime = 0x01000193; // FNV_prime for 32-bit
+    if (bytes > 0) {
+        for (int64_t i = 1; i < bytes; i++) {
+            hash ^= (uint32_t)data[i];
+            hash *= prime;
+        }
+    } else {
+        for (int64_t i = 0; data[i] != 0; i++) {
+            hash ^= (uint32_t)data[i];
+            hash *= prime;
+        }
+    }
+    return hash;
+}
+
+static uint64_t map_hash64(const uint8_t* data, int64_t bytes) {
+    uint64_t hash  = 0xcbf29ce484222325; // FNV_offset_basis for 64-bit
+    uint64_t prime = 0x100000001b3;      // FNV_prime for 64-bit
+    if (bytes > 0) {
+        for (int64_t i = 0; i < bytes; i++) {
+            hash ^= (uint64_t)data[i];
+            hash *= prime;
+        }
+    } else {
+        for (int64_t i = 0; data[i] != 0; i++) {
+            hash ^= (uint64_t)data[i];
+            hash *= prime;
+        }
+    }
+    return hash;
+}
+
+static void map_init(map_t* map) {
+    for (int32_t i = 0; i < rt_countof(map->entry); i++) {
+        map->entry[i][0] = 0;
+    }
+    map->entries = 0;
+    map->max_chain = 0;
+    map->max_bytes = 0;
+}
+
+static const uint8_t* map_get(const map_t* map, const uint8_t* data, uint8_t bytes) {
+    uint64_t hash = map_hash64(data, bytes);
+    size_t i = (size_t)hash % rt_countof(map->entry);
+    while (map->entry[i][0] > 0) {
+        if (map->entry[i][0] == bytes && memcmp(&map->entry[i][1], data, bytes) == 0) {
+            return &map->entry[i][1];
+        }
+        i = (i + 1) % rt_countof(map->entry);
+    }
+    return null;
+}
+
+static void map_put(map_t* map, const uint8_t* data, uint8_t bytes) {
+    rt_swear(2 <= bytes && bytes < rt_countof(map->entry[0]));
+    rt_swear(map->entries < rt_countof(map->entry) * 3 / 4);
+    uint64_t hash = map_hash64(data, bytes);
+    size_t i = (size_t)hash % rt_countof(map->entry);
+    int32_t rehash = 0;
+    while (map->entry[i][0] > 0) {
+        if (map->entry[i][0] == bytes &&
+            memcmp(&map->entry[i][1], data, bytes) == 0) {
+            return; // already exists
+        }
+        rehash++;
+        i = (i + 1) % rt_countof(map->entry);
+    }
+    if (rehash > map->max_chain) { map->max_chain = rehash; }
+    if (bytes  > map->max_bytes) { map->max_bytes = bytes; }
+    map->entry[i][0] = bytes;
+    memcpy(&map->entry[i][1], data, bytes);
+    map->entries++;
+}
+
+static void map_clear(map_t *map) {
+    for (int32_t i = 0; i < rt_countof(map->entry); i++) {
+        map->entry[i][0] = 0;
+    }
+    map->entries = 0;
+    map->max_chain = 0;
+}
+
+static uint64_t pos_freq[64 * 1024];
+static uint64_t len_freq[64 * 1024];
+static map_t map;  // word map
+static map_t lens; // different bytes encountered
+static map_t poss; // different pos encountered
+
+static double lz77_entropy(uint64_t freq[], int32_t n) {
+    double total = 0;
+    double aha_entropy = 0.0;
+    for (int32_t i = 0; i < n; i++) { total += (double)freq[i]; }
+    for (int32_t i = 0; i < n; i++) {
+        if (freq[i] > 0) {
+            double p_i = (double)freq[i] / total;
+            aha_entropy += p_i * log2(p_i);
+        }
+    }
+    return -aha_entropy;
+}
+
 static void lz77_compress(lz77_t* lz, const uint8_t* data, size_t bytes,
         uint8_t window_bits) {
+memset(pos_freq, 0x00, sizeof(pos_freq));
+memset(len_freq, 0x00, sizeof(pos_freq));
+map_init(&map);
+map_init(&lens);
+map_init(&poss);
     lz77_if_error_return(lz);
     if (window_bits < 10 || window_bits > 20) { lz77_return_invalid(lz); }
     lz77_init_histograms();
@@ -157,7 +275,7 @@ static void lz77_compress(lz77_t* lz, const uint8_t* data, size_t bytes,
     uint32_t bp = 0;
     size_t i = 0;
     while (i < bytes) {
-        // length and position of longest matching sequence
+        // bytes and position of longest matching sequence
         size_t len = 0;
         size_t pos = 0;
         if (i >= 1) {
@@ -187,6 +305,14 @@ static void lz77_compress(lz77_t* lz, const uint8_t* data, size_t bytes,
             lz77_write_number(lz, &b64, &bp, len, base);
             lz77_if_error_return(lz);
             lz77_histogram_pos_len(pos, len);
+if (len < window) { len_freq[len]++; }
+if (pos < window) { pos_freq[pos]++; }
+// lz77_println("\"%.*s\"", bytes, &data[i]);
+if (len <= 255) {
+    map_put(&map, &data[i], (uint8_t)len);
+}
+map_put(&lens, (uint8_t*)&len, (uint8_t)sizeof(len));
+map_put(&poss, (uint8_t*)&pos, (uint8_t)sizeof(pos));
             i += len;
         } else {
             const uint8_t b = data[i];
@@ -210,6 +336,12 @@ static void lz77_compress(lz77_t* lz, const uint8_t* data, size_t bytes,
     }
     lz77_flush(lz, b64, bp);
     lz77_dump_histograms();
+    double len_bits = lz77_entropy(len_freq, (int32_t)window);
+    double pos_bits = lz77_entropy(pos_freq, (int32_t)window);
+    lz77_println("bits len: %.2f pos: %.2f words: %d "
+                 "max chain: %d max bytes: %d #len: %d #pos: %d",
+        len_bits, pos_bits, map.entries, map.max_chain, map.max_bytes,
+        lens.entries, poss.entries);
 }
 
 static inline uint64_t lz77_read_bit(lz77_t* lz, uint64_t* b64, uint32_t* bp) {
